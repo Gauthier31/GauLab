@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualisation du Pitch</title>
+    <style>
+        #pitchDisplay {
+            font-size: 24px;
+        }
+    </style>
+    <!-- Inclusion de la bibliothèque P5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+</head>
+
+<body>
+
+    <!--
+    <div id="pointeurBloc">
+        <img src="image/souris.png" id="pointeur" />
+    </div>
+    -->
+
+
+    <!-- Input pour choisir un fichier audio -->
+    <input type="file" accept="audio/*" id="audioInput">
+    <!-- Affichage de la fréquence (pitch) -->
+    <div id="pitchDisplay"></div>
+
+    <!-- Canevas pour la visualisation graphique -->
+    <div id="visualizerContainer">
+        <canvas id="visualizerCanvas"></canvas>
+    </div>
+
+
+
+    <script>
+        document.getElementById('audioInput').addEventListener('change', handleFile);
+
+        function handleFile(event) {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const file = event.target.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+
+                reader.onload = function (e) {
+                    audioContext.decodeAudioData(e.target.result, function (buffer) {
+                        const audioBufferSourceNode = audioContext.createBufferSource();
+                        audioBufferSourceNode.buffer = buffer;
+
+                        const analyser = audioContext.createAnalyser();
+                        analyser.fftSize = 2048;
+                        audioBufferSourceNode.connect(analyser);
+                        analyser.connect(audioContext.destination);
+
+                        audioBufferSourceNode.start(0);
+                        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                        function updatePitch() {
+                            analyser.getByteTimeDomainData(dataArray);
+                            const pitch = getPitch(dataArray);
+                            document.getElementById('pitchDisplay').innerText = `Pitch: ${pitch} Hz`;
+
+                            // Appel de la fonction pour dessiner la visualisation graphique
+                            drawVisualization(dataArray);
+
+                            requestAnimationFrame(updatePitch);
+                        }
+
+                        updatePitch();
+                    });
+                };
+
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        function getPitch(dataArray) {
+            const zeroCrossings = findZeroCrossings(dataArray);
+            const pitch = calculatePitch(zeroCrossings);
+            return pitch;
+        }
+
+        function findZeroCrossings(dataArray) {
+            const zeroCrossings = [];
+            for (let i = 0; i < dataArray.length - 1; i++) {
+                if (dataArray[i] > 128 && dataArray[i + 1] <= 128 ||
+                    dataArray[i] < 128 && dataArray[i + 1] >= 128) {
+                    zeroCrossings.push(i);
+                }
+            }
+            return zeroCrossings;
+        }
+
+        function calculatePitch(zeroCrossings) {
+            if (zeroCrossings.length < 2) {
+                return 0;
+            }
+
+            const firstZeroCrossing = zeroCrossings[0];
+            const lastZeroCrossing = zeroCrossings[zeroCrossings.length - 1];
+            const period = (lastZeroCrossing - firstZeroCrossing) / (zeroCrossings.length - 1);
+            const frequency = 1 / (period / 44100);
+
+            return frequency.toFixed(2);
+        }
+
+        // Fonction pour dessiner la visualisation graphique
+        function drawVisualization(dataArray) {
+            const canvas = document.getElementById('visualizerCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Effacer le canevas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Dessiner la courbe de la visualisation
+            ctx.beginPath();
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 2;
+
+            for (let i = 0; i < dataArray.length; i++) {
+                const x = (i / dataArray.length) * canvas.width;
+                const y = (dataArray[i] / 256) * canvas.height;
+                ctx.lineTo(x, y);
+            }
+
+            ctx.stroke();
+        }
+
+    </script>
+</body>
+
+</html>
